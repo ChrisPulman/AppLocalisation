@@ -99,9 +99,10 @@ jobs:
               | sed "s/^${TAG_PREFIX}//" || true
           )"
 
-          BASELINE="${LAST:-0.0.0}"
+          # Apply the minimum before incrementing so it cannot erase the requested bump.
+          BASELINE="$(printf '%s\n%s\n' "$FLOOR" "${LAST:-0.0.0}" | sort -V | tail -1)"
           if [ -z "$LAST" ]; then
-            echo "No RTM tag (${TAG_PREFIX}X.Y.Z) found; the next version will be clamped to the MinVer floor ${FLOOR}."
+            echo "No RTM tag (${TAG_PREFIX}X.Y.Z) found; using the MinVer floor ${FLOOR} as the release baseline."
           fi
 
           IFS=. read -r MAJOR MINOR PATCH <<< "$BASELINE"
@@ -110,8 +111,6 @@ jobs:
             minor) CORE="${MAJOR}.$((MINOR + 1)).0" ;;
             patch) CORE="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
           esac
-
-          CORE="$(printf '%s\n%s\n' "$FLOOR" "$CORE" | sort -V | tail -1)"
 
           if [ -n "$PRE_RELEASE_ID" ]; then
             MAXN=0
