@@ -46,6 +46,8 @@ internal sealed class WpfLocalizationTests
 
     private const string UpdatedValue = "Updated";
 
+    private const string DebuggerDisplayProperty = "DebuggerDisplay";
+
     [Test]
     internal async Task CultureManagersPublishAndSynchronizeChanges()
     {
@@ -261,6 +263,7 @@ internal sealed class WpfLocalizationTests
                     var leanValue = lean.ProvideValue(provider);
                     var reactiveValue = reactive.ProvideValue(provider);
                     Lean.ResxExtension.UpdateTarget(GreetingKey);
+                    Reactive.ResxExtension.UpdateTarget(GreetingKey);
                     Reactive.ResxExtension.UpdateAllTargets();
                     var languageProvider = new TestServiceProvider(target, FrameworkElement.LanguageProperty);
                     var leanLanguage = new Lean.UICultureExtension().ProvideValue(languageProvider);
@@ -306,12 +309,30 @@ internal sealed class WpfLocalizationTests
                 _ = second.ProvideValue(new EmptyServiceProvider());
                 manager.UpdateAllTargets();
                 manager.CleanupInactiveExtensions();
+                var initialExtensionCount = manager.ActiveExtensions.Count;
+                var clrTarget = new MutableTarget();
+                var clrExtension = new ReactiveTestExtension(manager) { Value = "CLR" };
+                _ = clrExtension.ProvideValue(new TestServiceProvider(clrTarget, typeof(MutableTarget).GetProperty(nameof(MutableTarget.Value))!));
+                clrExtension.UpdateTargets();
+                _ = clrExtension.ExposedTargetPropertyType;
+                var nullManagerRejected = false;
+                try
+                {
+                    _ = new ReactiveTestExtension(null!);
+                }
+                catch (ArgumentNullException)
+                {
+                    nullManagerRejected = true;
+                }
+
                 return new ReactiveManagerResult(
                     initialValue,
                     target.Text,
                     first.IsTarget(target),
                     first.ExposedTargetPropertyType,
-                    manager.ActiveExtensions.Count);
+                    initialExtensionCount,
+                    clrTarget.Value,
+                    nullManagerRejected);
             });
 
         await Assert.That(result.InitialValue).IsEqualTo(InitialValue);
@@ -319,6 +340,8 @@ internal sealed class WpfLocalizationTests
         await Assert.That(result.IsTarget).IsTrue();
         await Assert.That(result.TargetPropertyType).IsEqualTo(typeof(string));
         await Assert.That(result.ActiveExtensionCount).IsEqualTo(ExpectedEnumValueCount);
+        await Assert.That(result.ClrValue).IsEqualTo("CLR");
+        await Assert.That(result.NullManagerRejected).IsTrue();
     }
 
     [Test]
@@ -328,6 +351,55 @@ internal sealed class WpfLocalizationTests
             static () => ValidateLeanBindingProperties() && ValidateReactiveBindingProperties());
 
         await Assert.That(result).IsTrue();
+    }
+
+    /// <summary>Verifies template property types and removal of expired target references.</summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    internal async Task ManagedExtensionsCleanUpExpiredAndUnknownTargets()
+    {
+        var result = RunOnSta(
+            static () =>
+            {
+                var leanManager = new Lean.MarkupExtensionManager(0);
+                var reactiveManager = new Reactive.MarkupExtensionManager(0);
+                var lean = new LeanTestExtension(leanManager);
+                var reactive = new ReactiveTestExtension(reactiveManager);
+                var emptyLeanType = lean.ExposedTargetPropertyType;
+                var emptyReactiveType = reactive.ExposedTargetPropertyType;
+                var target = new MutableTarget();
+                var unknownProperty = new object();
+                _ = lean.ProvideValue(new TestServiceProvider(target, unknownProperty));
+                _ = reactive.ProvideValue(new TestServiceProvider(target, unknownProperty));
+                var unknownLeanType = lean.ExposedTargetPropertyType;
+                var unknownReactiveType = reactive.ExposedTargetPropertyType;
+                lean.UpdateTargets();
+                reactive.UpdateTargets();
+                lean.DeactivateTargets();
+                reactive.DeactivateTargets();
+                lean.UpdateTargets();
+                reactive.UpdateTargets();
+                leanManager.CleanupInactiveExtensions();
+                reactiveManager.CleanupInactiveExtensions();
+                var leanAlive = lean.IsTargetAlive;
+                var reactiveAlive = reactive.IsTargetAlive;
+                const BindingFlags debuggerFlags = BindingFlags.NonPublic | BindingFlags.Instance;
+                _ = typeof(Lean.MarkupExtensionManager).GetProperty(DebuggerDisplayProperty, debuggerFlags)!.GetValue(leanManager);
+                _ = typeof(Reactive.MarkupExtensionManager).GetProperty(DebuggerDisplayProperty, debuggerFlags)!.GetValue(reactiveManager);
+                _ = typeof(Lean.UICultureExtension).GetProperty(DebuggerDisplayProperty, debuggerFlags)!.GetValue(new Lean.UICultureExtension());
+                _ = typeof(Reactive.UICultureExtension).GetProperty(DebuggerDisplayProperty, debuggerFlags)!.GetValue(new Reactive.UICultureExtension());
+                return (emptyLeanType, emptyReactiveType, unknownLeanType, unknownReactiveType, leanAlive, reactiveAlive,
+                    leanManager.ActiveExtensions.Count, reactiveManager.ActiveExtensions.Count);
+            });
+
+        await Assert.That(result.emptyLeanType).IsNull();
+        await Assert.That(result.emptyReactiveType).IsNull();
+        await Assert.That(result.unknownLeanType).IsEqualTo(typeof(object));
+        await Assert.That(result.unknownReactiveType).IsEqualTo(typeof(object));
+        await Assert.That(result.leanAlive).IsFalse();
+        await Assert.That(result.reactiveAlive).IsFalse();
+        await Assert.That(result.Item7).IsEqualTo(0);
+        await Assert.That(result.Item8).IsEqualTo(0);
     }
 
     private static bool CultureMatches(CultureInfo? culture, string name) =>
@@ -500,6 +572,14 @@ internal sealed class WpfLocalizationTests
 
         public object Value { get; set; } = string.Empty;
 
+        internal void DeactivateTargets()
+        {
+            foreach (var reference in TargetObjects)
+            {
+                reference.Target = null;
+            }
+        }
+
         protected override object GetValue() => Value;
     }
 
@@ -535,6 +615,14 @@ internal sealed class WpfLocalizationTests
         public Type? ExposedTargetPropertyType => TargetPropertyType;
 
         public object Value { get; set; } = string.Empty;
+
+        internal void DeactivateTargets()
+        {
+            foreach (var reference in TargetObjects)
+            {
+                reference.Target = null;
+            }
+        }
 
         protected override object GetValue() => Value;
     }
@@ -572,5 +660,7 @@ internal sealed class WpfLocalizationTests
         string UpdatedValue,
         bool IsTarget,
         Type? TargetPropertyType,
-        int ActiveExtensionCount);
+        int ActiveExtensionCount,
+        string? ClrValue,
+        bool NullManagerRejected);
 }

@@ -165,7 +165,7 @@ public class ResourceEnumConverter : EnumConverter, IValueConverter
             return result;
         }
 
-        result = new(StringComparer.CurrentCulture);
+        result = [with(StringComparer.CurrentCulture)];
         if (GetStandardValues() is { } standardValues)
         {
             foreach (var value in standardValues)

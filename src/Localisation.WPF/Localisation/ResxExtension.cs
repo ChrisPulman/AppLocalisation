@@ -94,40 +94,14 @@ public class ResxExtension : ManagedMarkupExtension
             return;
         }
 
-        _assemblyProbingPaths = [];
-
         // check the registry first for a defined assembly path - use OpenBaseKey to avoid
         // Wow64 redirection
-        using (var key = Registry.CurrentUser.OpenSubKey(@"Software\ResxExtension", false))
-        {
-            if (key?.GetValue("AssemblyPath") is string assemblyPath)
-            {
-                foreach (var path in assemblyPath.Split(';'))
-                {
-                    _assemblyProbingPaths.Add(path.Trim());
-                }
-            }
-        }
-
-        // Look for Visual Studio hosting processes and add the path to the probing path -
-        // this means that if the hosting process is enabled you don't need to use a registry entry
-        foreach (var process in Process.GetProcesses())
-        {
-            try
-            {
-                if (process.ProcessName.Contains(".vshost"))
-                {
-                    var path = GetProcessFilepath(process.Id);
-                    _assemblyProbingPaths.Add(Path.GetDirectoryName(path)!);
-                }
-            }
-            catch (Win32Exception)
-            {
-            }
-            catch (InvalidOperationException)
-            {
-            }
-        }
+        using var key = Registry.CurrentUser.OpenSubKey(@"Software\ResxExtension", false);
+        _assemblyProbingPaths = CollectAssemblyProbingPaths(
+            key?.GetValue("AssemblyPath") as string,
+            Process.GetProcesses(),
+            GetProcessFilepath,
+            static process => process.ProcessName);
 
         AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
     }
@@ -455,27 +429,7 @@ public class ResxExtension : ManagedMarkupExtension
     /// <summary>Return a list of the current design time cultures.</summary>
     /// <returns>A Value.</returns>
     internal static List<CultureInfo> GetDesignTimeCultures()
-    {
-        var result = new List<CultureInfo>();
-        if (_assemblyProbingPaths is not null)
-        {
-            foreach (var path in _assemblyProbingPaths)
-            {
-                var subDirectories = Directory.GetDirectories(path);
-                _ = new CultureInfoConverter();
-                foreach (var subDirectory in subDirectories)
-                {
-                    var culture = GetCulture(Path.GetFileName(subDirectory));
-                    if (culture is not null)
-                    {
-                        result.Add(culture);
-                    }
-                }
-            }
-        }
-
-        return result;
-    }
+        => FindDesignTimeCultures(_assemblyProbingPaths);
 
     /// <summary>Return the value for the markup extension.</summary>
     /// <returns>The value from the resources if possible otherwise the default value.</returns>
@@ -523,6 +477,70 @@ public class ResxExtension : ManagedMarkupExtension
         }
     }
 
+    private static List<string> CollectAssemblyProbingPaths(
+        string? assemblyPath,
+        IEnumerable<Process> processes,
+        Func<int, string?> getProcessFilepath,
+        Func<Process, string> getProcessName)
+    {
+        var paths = new List<string>();
+        if (assemblyPath is not null)
+        {
+            foreach (var path in assemblyPath.Split(';'))
+            {
+                paths.Add(path.Trim());
+            }
+        }
+
+        // Look for Visual Studio hosting processes and add the path to the probing path -
+        // this means that if the hosting process is enabled you don't need to use a registry entry
+        foreach (var process in processes)
+        {
+            using (process)
+            {
+                try
+                {
+                    if (getProcessName(process).Contains(".vshost"))
+                    {
+                        var path = getProcessFilepath(process.Id);
+                        paths.Add(Path.GetDirectoryName(path)!);
+                    }
+                }
+                catch (Win32Exception)
+                {
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }
+        }
+
+        return paths;
+    }
+
+    private static List<CultureInfo> FindDesignTimeCultures(IEnumerable<string>? probingPaths)
+    {
+        var result = new List<CultureInfo>();
+        if (probingPaths is not null)
+        {
+            foreach (var path in probingPaths)
+            {
+                var subDirectories = Directory.GetDirectories(path);
+                _ = new CultureInfoConverter();
+                foreach (var subDirectory in subDirectories)
+                {
+                    var culture = GetCulture(Path.GetFileName(subDirectory));
+                    if (culture is not null)
+                    {
+                        result.Add(culture);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>Convert a culture name to a CultureInfo - without exceptions if the name is bad.</summary>
     /// <param name="name">The name of the culture.</param>
     /// <returns>The culture if the name was valid, or else null.</returns>
@@ -547,11 +565,7 @@ public class ResxExtension : ManagedMarkupExtension
     /// <returns>True if the assembly contains the resource.</returns>
     private static bool HasEmbeddedResx(Assembly assembly, string? resxName)
     {
-        // check for dynamic assemblies - we can't call IsDynamic since it was only introduced in
-        // .NET 4
-        var assemblyTypeName = assembly.GetType().Name;
-        if (assemblyTypeName == "AssemblyBuilder"
-            || assemblyTypeName == "InternalAssemblyBuilder")
+        if (assembly.IsDynamic)
         {
             return false;
         }
@@ -598,6 +612,9 @@ public class ResxExtension : ManagedMarkupExtension
     /// The assembly if found.
     /// </returns>
     private static Assembly? OnAssemblyResolve(object? sender, ResolveEventArgs args)
+        => ResolveAssembly(args, _assemblyProbingPaths ?? []);
+
+    private static Assembly? ResolveAssembly(ResolveEventArgs args, IEnumerable<string> probingPaths)
     {
         Assembly? result = null;
         var nameSplit = args!.Name.Split(',');
@@ -649,7 +666,7 @@ public class ResxExtension : ManagedMarkupExtension
         // assembly probing paths
         string? latestFile = null;
         var latestFileTime = DateTime.MinValue;
-        foreach (var path in _assemblyProbingPaths!)
+        foreach (var path in probingPaths)
         {
             var dir = Path.Combine(path, culture);
             var file = Path.Combine(dir, fileName);
@@ -659,6 +676,7 @@ public class ResxExtension : ManagedMarkupExtension
                 if (fileTime > latestFileTime)
                 {
                     latestFile = file;
+                    latestFileTime = fileTime;
                 }
             }
         }
