@@ -368,17 +368,17 @@ jobs:
           set -euo pipefail
           : "${CERTUM_CERT_FINGERPRINT:?map the CERTUM_CERT_FINGERPRINT secret into the job env}"
 
-          JAR="${JSIGN_JAR:-$RUNNER_TEMP/jsign.jar}"
+          # Select the artifact matching the pinned checksum, not the image's JSIGN_JAR.
+          JAR="$RUNNER_TEMP/jsign-7.4.jar"
           EXPECTED_JSIGN_SHA256="2abf2ade9ea322acc2d60c24794eadc465ff9380938fca4c932d09e0b25f1c28"
-          if [ ! -s "$JAR" ]; then
-            curl -fsSL -o "$JAR" "https://repo1.maven.org/maven2/net/jsign/jsign/7.4/jsign-7.4.jar"
-          fi
+          curl -fsSL -o "$JAR" "https://repo.maven.apache.org/maven2/net/jsign/jsign/7.4/jsign-7.4.jar"
 
           actual_jsign_sha256="$(sha256sum "$JAR" | awk '{print $1}')"
           if [ "$actual_jsign_sha256" != "$EXPECTED_JSIGN_SHA256" ]; then
             echo "::error::jsign checksum validation failed."
             exit 1
           fi
+          java -jar "$JAR" --version
 
           CONF="$RUNNER_TEMP/sunpkcs11.conf"
           {
