@@ -2,7 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net11.0</TargetFramework>
+    <!-- NUKE compares the entry DLL path with argv[0]; launch it through dotnet. -->
+    <UseAppHost>false</UseAppHost>
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace></RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NukeRootDirectory>..</NukeRootDirectory>
@@ -14,6 +16,7 @@
   <ItemGroup>
     <PackageReference Include="Nuke.Common" />
     <PackageReference Include="CP.Nuke.BuildTools" />
+    <PackageReference Include="NuGet.Packaging" />
     <PackageReference Include="System.Security.Cryptography.Xml" />
     <PackageReference Include="StyleSharp.Analyzers" PrivateAssets="All" />
     <PackageReference Include="Roslynator.Analyzers" PrivateAssets="All" />

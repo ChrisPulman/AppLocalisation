@@ -23,6 +23,7 @@
     <PackageVersion Include="TUnit" Version="1.72.16" />
     <PackageVersion Include="Nuke.Common" Version="10.1.0" />
     <PackageVersion Include="CP.Nuke.BuildTools" Version="3.0.2" />
+    <PackageVersion Include="NuGet.Packaging" Version="7.9.0" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.12" />
     <PackageVersion Include="MinVer" Version="8.0.0" />
   </ItemGroup>
