@@ -30,7 +30,7 @@ public sealed class ResxExtension
             defaultValue: null,
             inherits: true);
 
-    private static readonly Dictionary<string, WeakReference<ResourceManager>> _resourceManagers = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, WeakReference<ResourceManager>> _resourceManagers = [with(StringComparer.Ordinal)];
 
     private static readonly object _resourceManagersLock = new();
 

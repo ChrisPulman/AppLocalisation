@@ -15,6 +15,7 @@
     <PackageTags>Localisation;WPF;Avalonia;ReactiveUI;net</PackageTags>
     <EnableNETAnalyzers>True</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
     <PackageProjectUrl>https://github.com/ChrisPulman/Localisation.WPF</PackageProjectUrl>
     <RepositoryUrl>https://github.com/ChrisPulman/Localisation.WPF</RepositoryUrl>

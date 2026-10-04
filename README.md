@@ -687,8 +687,8 @@ The solution uses Microsoft Testing Platform with TUnit and TUnit assertions.
 
 ```powershell
 dotnet build .\src\Localisation.slnx --configuration Release -m:1
-dotnet run --project .\src\Localisation.WPF.Tests\Localisation.WPF.Tests.csproj --configuration Release --no-build
-dotnet run --project .\src\Localisation.Avalonia.Tests\Localisation.Avalonia.Tests.csproj --configuration Release --no-build
+dotnet test --solution .\src\Localisation.slnx --configuration Release --coverage --coverage-output-format cobertura --results-directory .\TestResults
+pwsh -File .\build\Assert-Coverage.ps1 -ResultsDirectory .\TestResults
 ```
 
 ## License

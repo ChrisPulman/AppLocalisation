@@ -205,6 +205,7 @@ jobs:
       - name: Build
         env:
           MinVerVersionOverride: ${{ steps.minver.outputs.SemVer2 }}
+          TreatWarningsAsErrors: true
         run: ./build.cmd Compile --configuration ${{ env.configuration }}
 
       - name: Tests + Coverage (MTP)
@@ -215,10 +216,14 @@ jobs:
         run: |
           dotnet test --solution "${{ env.solutionFile }}" \
             --configuration "${{ env.configuration }}" \
-            --no-build \
             --coverage \
             --coverage-output-format cobertura \
             --results-directory ./TestResults
+
+      - name: Assert package line coverage
+        shell: pwsh
+        working-directory: ${{ env.solutionFolder }}
+        run: pwsh -File ../build/Assert-Coverage.ps1 -ResultsDirectory ./TestResults
 
       - name: Pack unsigned NuGet packages
         shell: bash

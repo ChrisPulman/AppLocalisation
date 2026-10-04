@@ -41,6 +41,8 @@ jobs:
           key: ${{ runner.os }}-${{ hashFiles('**/global.json', '**/*.csproj', '**/Directory.Packages.props') }}
 
       - name: 'Run: Compile'
+        env:
+          TreatWarningsAsErrors: true
         run: ./build.cmd Compile --configuration Release
 
       - name: Tests + Coverage (MTP)
@@ -49,10 +51,13 @@ jobs:
         run: |
           dotnet test --solution Localisation.slnx \
             --configuration Release \
-            --no-build \
             --coverage \
             --coverage-output-format cobertura \
             --results-directory ./TestResults
+
+      - name: Assert package line coverage
+        shell: pwsh
+        run: pwsh -File ./build/Assert-Coverage.ps1 -ResultsDirectory ./src/TestResults
 
       - name: Upload coverage
         uses: actions/upload-artifact@v7

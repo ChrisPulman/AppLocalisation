@@ -18,7 +18,6 @@
 
   <ItemGroup>
     <PackageReference Include="ReactiveUI.Primitives.Reactive" />
-    <PackageReference Include="ReactiveUI.Primitives.Wpf.Reactive" />
     <PackageReference Include="System.Management" />
   </ItemGroup>
 

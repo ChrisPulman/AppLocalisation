@@ -177,6 +177,7 @@ internal sealed class AvaloniaLocalizationTests
         leanSubscription.Dispose();
         leanSubscription.Dispose();
         reactiveSubscription.Dispose();
+        reactiveSubscription.Dispose();
         Lean.CultureManager.Refresh();
         Reactive.CultureManager.Refresh();
         await Assert.That(leanObserver.Values).Count().IsEqualTo(ExpectedRefreshCount);
@@ -411,6 +412,33 @@ internal sealed class AvaloniaLocalizationTests
             () => new TextBlock { Text = "Headless" }.Text,
             CancellationToken.None);
         await Assert.That(text).IsEqualTo("Headless");
+    }
+
+    /// <summary>Verifies optional keys and invalid targets use the documented fallback and guards.</summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    internal async Task ResourceExtensionsHandleNullKeysAndGuardAttachedTargets()
+    {
+        var lean = new Lean.ResxExtension { Key = null, ResxName = TestResxName };
+        var reactive = new Reactive.ResxExtension { Key = null, ResxName = TestResxName };
+        await Assert.That(lean.ResolveValue(null, typeof(object))).IsEqualTo("#");
+        await Assert.That(reactive.ResolveValue(null, typeof(object))).IsEqualTo("#");
+        await Assert.That(reactive.ResolveValue(null, typeof(int))).IsNull();
+        await Assert.That(lean.ProvideValue(new TestServiceProvider(new object(), new object()))).IsNotNull();
+        await Assert.That(reactive.ProvideValue(new TestServiceProvider(new object(), new object()))).IsNotNull();
+        await Assert.That(() => Lean.ResxExtension.SetDefaultResxName(null!, null)).Throws<ArgumentNullException>();
+        await Assert.That(() => Reactive.ResxExtension.SetDefaultResxName(null!, null)).Throws<ArgumentNullException>();
+        await Assert.That(() => Reactive.ResxExtension.GetDefaultResxName(null!)).Throws<ArgumentNullException>();
+        await Assert.That(() => Reactive.ResxExtension.UpdateTarget(" ")).Throws<ArgumentException>();
+        await Assert.That(() => new Lean.GetResourceEventArgs(null, null, null!)).Throws<ArgumentNullException>();
+        var manager = new ResourceManager(TestResxName, typeof(AvaloniaLocalizationTests).Assembly);
+        await Assert.That(() => new Reactive.ResourceEnumConverter(typeof(SampleValue), null!)).Throws<ArgumentNullException>();
+        var converter = new Lean.ResourceEnumConverter(typeof(SampleValue), manager);
+        await Assert.That(((IValueConverter)converter).ConvertBack(
+            FirstLocalizedValue,
+            typeof(SampleValue),
+            null,
+            CultureInfo.InvariantCulture)).IsEqualTo(SampleValue.First);
     }
 
     [Test]
