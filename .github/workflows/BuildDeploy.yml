@@ -230,6 +230,10 @@ jobs:
           MinVerVersionOverride: ${{ steps.minver.outputs.SemVer2 }}
         run: dotnet pack --no-build --no-restore --configuration "${{ env.configuration }}" ${{ env.solutionFile }} -o "${GITHUB_WORKSPACE}/packages" -p:MinVerVersionOverride="${{ steps.minver.outputs.SemVer2 }}"
 
+      - name: Prepare and validate symbol packages
+        shell: pwsh
+        run: ./build/Prepare-SymbolPackages.ps1 -PackagesDirectory ./packages -ResolvePublishedPackages
+
       - name: Upload unsigned packages
         uses: actions/upload-artifact@v7
         with:
@@ -447,6 +451,17 @@ jobs:
           [ "${#packages[@]}" -gt 0 ] || { echo "::error::no publishable packages matched: ./signed/*.nupkg"; exit 1; }
 
           for pkg in "${packages[@]}"; do
+            dotnet nuget push "$pkg" \
+              --source https://api.nuget.org/v3/index.json \
+              --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
+              --no-symbols \
+              --skip-duplicate
+          done
+
+          # Push symbols explicitly so a duplicate primary package cannot skip its symbols.
+          symbols=(./signed/*.snupkg)
+          [ "${#symbols[@]}" -gt 0 ] || { echo "::error::no symbol packages matched: ./signed/*.snupkg"; exit 1; }
+          for pkg in "${symbols[@]}"; do
             dotnet nuget push "$pkg" \
               --source https://api.nuget.org/v3/index.json \
               --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \

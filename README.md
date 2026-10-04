@@ -691,6 +691,14 @@ dotnet test --solution .\src\Localisation.slnx --configuration Release --coverag
 pwsh -File .\build\Assert-Coverage.ps1 -ResultsDirectory .\TestResults
 ```
 
+Release packages include portable PDBs in `.snupkg` files. Before upload, `build/Prepare-SymbolPackages.ps1` checks each library's PDB identity and checksum against its DLL. Resource satellite assemblies do not require PDBs.
+
+For a partially published version, the release workflow preserves the existing NuGet package and recovers its matching symbols from that package. Primary packages and symbol packages are pushed separately, allowing missing symbols to be published even when the primary package already exists. To validate local packages without accessing NuGet.org:
+
+```powershell
+pwsh -File .\build\Prepare-SymbolPackages.ps1 -PackagesDirectory .\packages
+```
+
 ## License
 
 Localisation is licensed under the [MIT License](LICENSE).
