@@ -251,7 +251,7 @@ jobs:
     permissions:
       contents: read
     container:
-      image: ghcr.io/reactiveui/certum-signer@sha256:a609cf99c5bdb673fa7b1e48c2dd6c3b0a559377a0278f673889f3b2f4ebe6ce
+      image: ghcr.io/reactiveui/certum-signer@sha256:05d52b46c5e62769146f37aae308127ec1d74cfb1209261e35334eaac700dcac
     env:
       CERTUM_USER_ID: ${{ secrets.CERTUM_USER_ID }}
       CERTUM_OTP_URI: ${{ secrets.CERTUM_OTP_URI }}
