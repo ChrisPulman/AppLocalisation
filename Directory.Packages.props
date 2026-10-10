@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <RoslynAnalysersVersion>5.1.2</RoslynAnalysersVersion>
+    <RoslynAnalysersVersion>5.1.3</RoslynAnalysersVersion>
     <ReactiveUIPrimitivesVersion>9.0.0</ReactiveUIPrimitivesVersion>
     <AvaloniaVersion>12.1.3</AvaloniaVersion>
   </PropertyGroup>
