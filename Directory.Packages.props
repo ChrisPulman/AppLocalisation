@@ -11,7 +11,7 @@
     <PackageVersion Include="Avalonia" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Headless" Version="$(AvaloniaVersion)" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
-    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.401" />
+    <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="10.0.402" />
     <PackageVersion Include="ReactiveUI.Primitives" Version="$(ReactiveUIPrimitivesVersion)" />
     <PackageVersion Include="ReactiveUI.Primitives.Reactive" Version="$(ReactiveUIPrimitivesVersion)" />
     <PackageVersion Include="Roslynator.Analyzers" Version="5.0.1" />
