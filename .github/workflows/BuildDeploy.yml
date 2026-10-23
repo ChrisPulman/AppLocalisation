@@ -249,15 +249,18 @@ jobs:
 
   sign:
     needs: release
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     environment:
       name: release
     permissions:
       contents: read
     env:
-      CERTUM_USER_ID: ${{ secrets.CERTUM_USER_ID }}
-      CERTUM_OTP_URI: ${{ secrets.CERTUM_OTP_URI }}
+      # Public certificate pin; update deliberately when rotating the release certificate.
+      CERTUM_CERT_FINGERPRINT: B306DD8211C841AE0E98FFF3AFEDDDD4B0930FAF6259CF1BD513F04496694590
     steps:
+      - name: Checkout signing tools
+        uses: actions/checkout@v7
+
       - name: Download unsigned packages
         uses: actions/download-artifact@v8
         with:
@@ -267,34 +270,28 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 11.0.x
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
-      - name: Install SafeSign
-        shell: bash
-        run: dotnet tool install --global SafeSign
+      - name: Build signing tool
+        shell: pwsh
+        run: dotnet build tools/ReleaseSigning/ReleaseSigning.csproj --configuration Release --verbosity quiet --nologo
 
-      - name: Sign NuGet packages with SafeSign
-        shell: bash
+      - name: Sign and verify DLLs before signing NuGet packages
+        shell: pwsh
+        env:
+          CERTUM_USER_ID: ${{ secrets.CERTUM_USER_ID }}
+          CERTUM_OTP_URI: ${{ secrets.CERTUM_OTP_URI }}
         run: |
-          set -euo pipefail
-          : "${CERTUM_USER_ID:?map the CERTUM_USER_ID secret into the job env}"
-          : "${CERTUM_OTP_URI:?map the CERTUM_OTP_URI secret into the job env}"
+          if (-not $env:CERTUM_USER_ID -or -not $env:CERTUM_OTP_URI) { throw 'Missing Certum signing credentials.' }
+          # One SafeSign provider/session signs every payload and then its enclosing package.
+          dotnet tools/ReleaseSigning/bin/Release/net10.0/ReleaseSigning.dll signed build/Verify-Authenticode.ps1 $env:CERTUM_CERT_FINGERPRINT
+          if ($LASTEXITCODE -ne 0) { throw 'Release signing failed.' }
 
-          shopt -s nullglob
-          packages=(signed/*.nupkg)
-          [ "${#packages[@]}" -gt 0 ] || { echo "::error::no packages matched: signed/*.nupkg"; exit 1; }
-
-          # Share one authenticated Certum session across every package.
-          safesign sign "${packages[@]}" \
-            --provider certum \
-            --hash SHA256 \
-            --timestamp-url http://time.certum.pl
-
-          for package in "${packages[@]}"; do
-            echo "::group::Verify $package"
-            dotnet nuget verify "$package" --all --verbosity detailed
-            echo "::endgroup::"
-          done
+      - name: Verify final NuGet signatures and packaged DLLs
+        shell: pwsh
+        run: ./build/Verify-SignedPackages.ps1 -PackagesDirectory ./signed -CertificateFingerprint $env:CERTUM_CERT_FINGERPRINT
 
       - name: Upload signed packages
         uses: actions/upload-artifact@v7

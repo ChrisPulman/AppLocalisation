@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SafeSign.Signing" />
+    <PackageReference Include="SafeSign.Formats" />
+    <PackageReference Include="SafeSign.Providers" />
+    <InternalsVisibleTo Include="Localisation.Avalonia.Tests" />
+  </ItemGroup>
+</Project>
