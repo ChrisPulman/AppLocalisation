@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishTrimmed>true</PublishTrimmed>
+    <PublishAot>$(LocalisationPublishAot)</PublishAot>
+    <TrimMode>full</TrimMode>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <LocalisationGenerateOnly>true</LocalisationGenerateOnly>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Localisation.Avalonia\Localisation.Avalonia.csproj" />
+    <ProjectReference Include="..\Localisation.Avalonia.Reactive\Localisation.Avalonia.Reactive.csproj" />
+    <ProjectReference Include="..\Localisation.Generators\Localisation.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;PublishTrimmed;RuntimeIdentifier;SelfContained" />
+    <TrimmerRootAssembly Include="Localisation.Avalonia" />
+    <TrimmerRootAssembly Include="Localisation.Avalonia.Reactive" />
+  </ItemGroup>
+  <Import Project="..\Localisation.Generators\buildTransitive\Localisation.Generators.targets" />
+</Project>

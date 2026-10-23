@@ -31,6 +31,8 @@ internal sealed class WpfResxCoverageTests
 
     private const string MissingKey = "Missing";
 
+    private const string MissingValue = "#Missing";
+
     private const string SourceName = "source";
 
     private const string CreateBindingMethod = "CreateBinding";
@@ -59,6 +61,33 @@ internal sealed class WpfResxCoverageTests
 
     private const string ResourceName = "Localisation.WPF.Tests.TestResources";
 
+    /// <summary>Verifies registered resources use the normal WPF conversion and missing-key fallback paths.</summary>
+    /// <param name="reactive">Whether the reactive variant is tested.</param>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Test]
+    [Arguments(false)]
+    [Arguments(true)]
+    internal async Task Resources_ResolveRegisteredProviders(bool reactive)
+    {
+        var dictionary = $"Registered.Wpf.Resources.{reactive}";
+        Lean.LocalisationResourceRegistry.Register(
+            "Registered.Wpf",
+            dictionary,
+            static (key, culture) => key switch { GreetingKey => culture.Name, "Number" => "17", _ => null });
+        var values = OnSta(() =>
+        {
+            var type = ExtensionType(reactive);
+            var culture = reactive ? Reactive.CultureManager.UICulture : Lean.CultureManager.UICulture;
+            var greeting = Provide(New(type, GreetingKey, dictionary), new TextBlock(), TextBlock.TextProperty);
+            var number = Provide(New(type, "Number", dictionary), new Border(), FrameworkElement.WidthProperty);
+            var missing = Provide(New(type, MissingKey, dictionary), new TextBlock(), TextBlock.TextProperty);
+            return (object?[])[greeting, culture.Name, number, missing];
+        });
+        await Assert.That(values[0]).IsEqualTo(values[1]);
+        await Assert.That(values[2]).IsEqualTo(NumericResource);
+        await Assert.That(values[3]).IsEqualTo(MissingValue);
+    }
+
     /// <summary>Verifies resource lookup, fallback conversion, and target registration.</summary>
     /// <param name="reactive">Whether the reactive variant is tested.</param>
     /// <returns>A task representing the asynchronous test.</returns>
@@ -70,11 +99,11 @@ internal sealed class WpfResxCoverageTests
         var values = OnSta(() => ExerciseResources(reactive));
         await Assert.That(values[0]).IsEqualTo(GreetingValue);
         await Assert.That(values[1]).IsEqualTo(GreetingValue);
-        await Assert.That(values[2]).IsEqualTo("#Missing");
+        await Assert.That(values[2]).IsEqualTo(MissingValue);
         await Assert.That(values[3]).IsEqualTo(NumericFallback);
         await Assert.That(values[4]).IsEqualTo("invalid-number");
         await Assert.That(values[5]).IsEqualTo("opaque");
-        await Assert.That(values[6]).IsEqualTo("#Missing");
+        await Assert.That(values[6]).IsEqualTo(MissingValue);
         await Assert.That(values[7]).IsNull();
         await Assert.That((bool)values[8]!).IsTrue();
         await Assert.That((bool)values[9]!).IsTrue();
