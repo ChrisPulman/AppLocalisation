@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <PackageVersion Include="SafeSign.Signing" Version="1.0.0" />
-    <PackageVersion Include="SafeSign.Formats" Version="1.0.0" />
+    <PackageVersion Include="SafeSign.Formats" Version="1.1.0" />
     <PackageVersion Include="SafeSign.Providers" Version="1.0.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <PackageVersion Include="Avalonia" Version="$(AvaloniaVersion)" />
