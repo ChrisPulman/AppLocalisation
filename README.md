@@ -5,7 +5,226 @@ Culture-aware RESX markup extensions, runtime culture switching, resource overri
 ![NuGet downloads](https://img.shields.io/nuget/dt/Localisation.WPF?color=pink&style=plastic)
 [![Localisation.WPF](https://img.shields.io/nuget/v/Localisation.WPF.svg?style=plastic)](https://www.nuget.org/packages/Localisation.WPF)
 
-## V2 is a breaking release
+## V3 user guide
+
+V3 adds generated RESX lookup for trimming and Native AOT, UI-independent localisation contexts, and reusable helpers for updating an existing interface when its language changes. Existing V2 resource extensions and converters remain available. The generated Avalonia path uses explicit conversion instead of discovering custom `TypeConverter` implementations.
+
+Start here:
+
+- [Install the packages](#1-install-the-packages).
+- [Add translated resources](#2-add-translated-resources).
+- [Create an application context](#3-create-an-application-context).
+- [Display text in Avalonia](#4-display-text-in-avalonia).
+- [Switch language immediately](#5-switch-language-immediately).
+- [Refresh computed properties](#6-refresh-computed-properties).
+- [Translate messages and choices](#7-translate-messages-and-choices).
+- [Publish with trimming and Native AOT](#8-publish-with-trimming-and-native-aot).
+
+For WPF, follow the [WPF quick start](#wpf-quick-start). The [package comparison](#choose-a-package), [existing culture APIs](#changing-and-observing-culture), and [public API reference](#complete-public-api-reference) follow this guide.
+
+### 1. Install the packages
+
+Choose one UI package: `Localisation.Avalonia` or `Localisation.WPF`. Choose its `.Reactive` variant instead if your application needs System.Reactive APIs. `Localisation.Core` provides the toolkit-independent APIs in `CP.Localisation` and is a dependency of the UI packages. A console application or shared library can reference Core directly.
+
+Add `Localisation.Generators` to **each project containing RESX files** that needs generated lookup. For a new Avalonia application, add these references to its existing project:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Localisation.Avalonia" Version="3.0.0" />
+  <PackageReference Include="Localisation.Generators" Version="3.0.0"
+                    PrivateAssets="all" />
+</ItemGroup>
+```
+
+These examples pin the initial V3 release; use the V3 patch version selected for your application consistently. The generator runs during compilation; consumers do not call generated implementation classes or manually register generated providers.
+
+### 2. Add translated resources
+
+This walkthrough uses an application with assembly name and root namespace `MyApp`. Create ordinary string RESX files with build action `EmbeddedResource`:
+
+| File | Culture | Example `Greeting` value |
+| --- | --- | --- |
+| `Strings.resx` | Neutral English | `Hello` |
+| `Strings.fr.resx` | French | `Bonjour` |
+| `Strings.de.resx` | German | `Hallo` |
+| `Strings.zh-Hans.resx` | Simplified Chinese | `你好` |
+| `Strings.ar.resx` | Arabic | `مرحباً` |
+
+Also add `SavedFile` (for example, `Saved {0}`), `Light`, and `Dark` to the neutral file and translate them in the other files. Keep resource keys identical across cultures and preserve composite-format placeholders such as `{0}`.
+
+```xml
+<PropertyGroup>
+  <AssemblyName>MyApp</AssemblyName>
+  <RootNamespace>MyApp</RootNamespace>
+  <NeutralLanguage>en</NeutralLanguage>
+  <LocalisationGenerateOnly>true</LocalisationGenerateOnly>
+</PropertyGroup>
+```
+
+The resource base name is `MyApp.Strings`, without a culture suffix or `.resources`. For a file under `Properties/Strings.resx`, it would normally be `MyApp.Properties.Strings`. Custom resource metadata can change this name.
+
+`LocalisationGenerateOnly` removes binary resources and satellite assemblies while retaining generated lookups. Omit it if existing code still reads these files through `ResourceManager` or RESX designer properties. Generated providers register when their assembly loads. For resources in a separate assembly, call a strongly referenced startup method in that assembly before creating localized controls; a resource-name string alone cannot load it.
+
+Lookup tries the requested culture, its parents, then the neutral file: `fr-CA` can use `Strings.fr.resx`. Missing translations therefore fall back to English in this example. Core's `Get` returns the key when no string is found; markup extensions can supply `DefaultValue`. The library does not generate translations or limit users to the cultures you ship.
+
+### 3. Create an application context
+
+Own one context for the application's interface, or separate contexts for independently localized views. This application-owned helper makes the context accessible to views and view models:
+
+```csharp
+using CP.Localisation;
+
+namespace MyApp;
+
+public static class AppText
+{
+    public static LocalisationContext Context { get; } =
+        new LocalisationContext("MyApp", "MyApp.Strings");
+}
+```
+
+After the resource assembly loads, call `AppText.Context.Initialize("Greeting")` during startup. It reports a missing provider or required key early. Dispose the context when its owner shuts down, after its consumers have finished.
+
+Use `AppText.Context.Get("Greeting")` for text and `AppText.Context.Format("SavedFile", "report.pdf")` for formatted text. `SetCulture` changes only this context. `InterfaceCulture.Apply` also changes ambient UI cultures; neither changes number or date formatting cultures.
+
+### 4. Display text in Avalonia
+
+For generated, reflection-free resource lookup, use `GeneratedResx`:
+
+```xml
+<UserControl
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="https://github.com/ChrisPulman/Localisation.Avalonia"
+    loc:ResxExtension.DefaultResxName="MyApp.Strings">
+    <TextBlock Text="{loc:GeneratedResx Greeting}" />
+</UserControl>
+```
+
+This markup observes the UI package's `CultureManager`. To bind directly to your independent context, use the typed binding helper in view code:
+
+```csharp
+using Avalonia.Controls;
+using CP.Localisation.Avalonia;
+
+var greeting = new TextBlock
+{
+    [!TextBlock.TextProperty] = LocalisationBinding.Create(
+        AppText.Context, AppText.Context,
+        static (text, culture) => text.Get("Greeting", culture)),
+};
+```
+
+The binding evaluates initially and again on context culture changes. A plain string captured during construction does not update itself. For `.Reactive`, use that package's XML namespace and `CP.Localisation.Avalonia.Reactive` C# namespace throughout the UI examples.
+
+### 5. Switch language immediately
+
+In your Avalonia `App`, capture the desktop culture before applying a saved preference. During startup, before creating the main window:
+
+```csharp
+using System;
+using System.Globalization;
+using CP.Localisation;
+using CP.Localisation.Avalonia;
+
+// In App startup; supply savedLanguage from your own settings storage.
+var desktopCulture = CultureInfo.CurrentUICulture;
+string? savedLanguage = null;
+var culture = InterfaceCulture.Resolve(
+    Environment.GetCommandLineArgs(), savedLanguage, desktopCulture);
+
+AppText.Context.Initialize("Greeting");
+InterfaceCulture.Apply(AppText.Context, culture);
+LocalisationWindows.ApplyDirection(this, AppText.Context); // Install once.
+LocalisationWindows.Refresh(this, AppText.Context, culture);
+```
+
+In the same `App` class, call this method from your language selector on the UI thread:
+
+```csharp
+public void ChangeLanguage(string cultureName)
+{
+    var culture = CultureInfo.GetCultureInfo(cultureName);
+    InterfaceCulture.Apply(AppText.Context, culture);
+    LocalisationWindows.Refresh(this, AppText.Context, culture);
+    // Persist culture.Name using the application's settings service.
+}
+```
+
+For example, select `en`, `fr`, `de`, `zh-Hans`, or `ar`. `Resolve` accepts `--language=fr` and `--language fr`; the last command-line override wins, followed by the saved preference and then the captured desktop culture. An empty or invalid selected name uses the desktop culture. Populate supported language choices yourself, or inspect `LocalisationResourceRegistry.GetAvailableCultures("MyApp")` for registered culture metadata.
+
+`ApplyDirection` updates window direction for languages such as Arabic. Preserve explicit direction overrides for content such as documents where appropriate. `Refresh` synchronizes the selected UI package's `CultureManager`, refreshes context-owned string lists, and visits existing desktop windows' data contexts and item sources. It does not open windows or recreate view models. Outside a desktop application lifetime, synchronize the culture/choices yourself and call `LocalisationWindows.Refresh(window)` for each existing window.
+
+### 6. Refresh computed properties
+
+A computed property still needs a property-change notification after switching culture. Implement `ILocalisationChildren` on participating models and name the properties and existing children explicitly:
+
+```csharp
+using System.Collections.Generic;
+using System.ComponentModel;
+using CP.Localisation;
+
+public sealed class SettingsViewModel : INotifyPropertyChanged, ILocalisationChildren
+{
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public string Title => MyApp.AppText.Context.Get("Greeting");
+
+    public object? ExistingChild { get; set; }
+
+    public void Refresh(HashSet<object> visited)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
+        LocalisationRefresh.RefreshCore(ExistingChild, visited);
+    }
+}
+```
+
+`LocalisationWindows.Refresh` starts this traversal for existing desktop window models. For a UI-independent graph, call `LocalisationRefresh.Refresh(root)`. Shared children and cycles are processed once by reference. Pass the supplied visited set to child calls and avoid evaluating lazy properties merely to refresh them. Use Avalonia compiled bindings for your view-model properties in an AOT application.
+
+### 7. Translate messages and choices
+
+Retain a deferred message when its text must be resolved in the currently selected language:
+
+```csharp
+var saved = LocalisationMessage.Format(
+    AppText.Context, "SavedFile", "report.pdf");
+string currentText = saved.ToString();
+// Reading saved.ToString() after a language change resolves the new translation.
+```
+
+`Get`, `Format`, `Literal`, and `Concat` preserve resource identities and nested messages. Use `Literal` for user-entered text or document content. A previously produced string remains a snapshot; notify or bind the property that displays the message. Format arguments use `CurrentCulture` for numbers and dates.
+
+For an Avalonia selector, create stable items and a culture-aware template once:
+
+```csharp
+var labels = AppText.Context.CreateChoices("Light", "Dark");
+var items = LocalisationChoices.CreateItems(AppText.Context, labels.ResourceKeys);
+var themeSelector = new ComboBox
+{
+    ItemsSource = items,
+    ItemTemplate = LocalisationChoices.CreateTemplate(),
+    SelectedIndex = 0,
+};
+```
+
+Labels change without replacing item identities or losing selection. Store the selected resource key or application value, rather than its translated label. For ordinary string-list consumers, call `context.RefreshChoices()` after selecting a culture; the window refresh helper already does this. Directly constructed `LocalisationStringList` instances require their own `Refresh()` call. See [localized enums](#localized-enums) and the [generic AOT-safe converter](#native-aot-and-trimming) for enum-valued choices.
+
+### 8. Publish with trimming and Native AOT
+
+Keep `GeneratedResx`, typed bindings, registered providers, and generic enum converters on the native path. Supply explicit converters for custom target types. The original Avalonia `Resx` and reflection-based enum APIs remain for compatibility and can produce trimming/AOT warnings. Non-string RESX entries require an [explicit resource provider](#native-aot-and-trimming).
+
+For an Avalonia desktop project configured for Native AOT, publish for a concrete runtime, with the matching native toolchain installed:
+
+```powershell
+dotnet publish MyApp.csproj -c Release -r win-x64 -p:PublishAot=true
+```
+
+Review trimming/AOT diagnostics for the whole application and test the published executable, including live changes between Latin, Chinese, and Arabic text, font availability, fallback, existing dialogs, selections, and writing direction. WPF itself does not support Native AOT or trimming. The library's [AOT verification instructions](#native-aot-and-trimming) describe its own smoke consumers.
+
+If text stays in the old language, check that the language handler calls both `InterfaceCulture.Apply` and `LocalisationWindows.Refresh` on the UI thread, uses the same context/package variant as the views, and notifies computed properties. If a key appears instead of text, check the assembly name, resource base name, key spelling, generator reference in the resource-owning project, and resource assembly startup reference.
+
+## Migration from V1 to V2 and V3
 
 V2 replaces the lean package's direct System.Reactive dependency with [ReactiveUI.Primitives](https://www.nuget.org/packages/ReactiveUI.Primitives) and adds separate `*.Reactive` packages for applications that use System.Reactive/Rx APIs.
 
