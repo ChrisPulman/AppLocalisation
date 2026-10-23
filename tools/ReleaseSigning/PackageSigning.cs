@@ -1,7 +1,6 @@
 // Copyright (c) Chris Pulman. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using System.Diagnostics;
 using System.IO.Compression;
 using System.Xml.Linq;
 using SafeSign.Formats.NuGet;
@@ -47,24 +46,6 @@ internal static class PackageSigning
         {
             staging.Delete(recursive: true);
         }
-    }
-
-    internal static async Task VerifyFileAsync(string path, string script, string fingerprint)
-    {
-        var start = new ProcessStartInfo("pwsh") { UseShellExecute = false, CreateNoWindow = true };
-        foreach (var argument in new[] { "-NoProfile", "-File", script, "-Path", path, "-CertificateFingerprint", fingerprint })
-        {
-            start.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Authenticode verification.");
-        await process.WaitForExitAsync();
-        if (process.ExitCode == 0)
-        {
-            return;
-        }
-
-        throw new InvalidDataException($"Authenticode verification failed for '{path}'.");
     }
 
     private static async Task SignPayloadAsync(string package, SigningSession session, Func<string, Task> verifyFile)

@@ -3,6 +3,10 @@ name: BuildDeploy
 on:
   workflow_dispatch:
     inputs:
+      verifyOnly:
+        description: 'Build, sign and verify artifacts without publishing packages or a GitHub release.'
+        type: boolean
+        default: false
       bump:
         description: 'Release level'
         required: true
@@ -39,6 +43,8 @@ env:
   solutionFile: Localisation.slnx
   solutionFolder: src
   minMajorMinorVersion: '1.1'
+  # Public certificate pin; update deliberately when rotating the release certificate.
+  CERTUM_CERT_FINGERPRINT: B306DD8211C841AE0E98FFF3AFEDDDD4B0930FAF6259CF1BD513F04496694590
 
 jobs:
   release:
@@ -249,14 +255,11 @@ jobs:
 
   sign:
     needs: release
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     environment:
       name: release
     permissions:
       contents: read
-    env:
-      # Public certificate pin; update deliberately when rotating the release certificate.
-      CERTUM_CERT_FINGERPRINT: B306DD8211C841AE0E98FFF3AFEDDDD4B0930FAF6259CF1BD513F04496694590
     steps:
       - name: Checkout signing tools
         uses: actions/checkout@v7
@@ -286,14 +289,43 @@ jobs:
         run: |
           if (-not $env:CERTUM_USER_ID -or -not $env:CERTUM_OTP_URI) { throw 'Missing Certum signing credentials.' }
           # One SafeSign provider/session signs every payload and then its enclosing package.
-          dotnet tools/ReleaseSigning/bin/Release/net10.0/ReleaseSigning.dll signed build/Verify-Authenticode.ps1 $env:CERTUM_CERT_FINGERPRINT
+          dotnet tools/ReleaseSigning/bin/Release/net10.0/ReleaseSigning.dll signed $env:CERTUM_CERT_FINGERPRINT
           if ($LASTEXITCODE -ne 0) { throw 'Release signing failed.' }
+
+      - name: Upload packages for Windows verification
+        uses: actions/upload-artifact@v7
+        with:
+          name: pending-signature-verification
+          path: |
+            signed/*.nupkg
+            signed/*.snupkg
+          if-no-files-found: error
+
+  verify-signatures:
+    needs: sign
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout verification tools
+        uses: actions/checkout@v7
+
+      - name: Download signed packages
+        uses: actions/download-artifact@v8
+        with:
+          name: pending-signature-verification
+          path: signed
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 11.0.x
 
       - name: Verify final NuGet signatures and packaged DLLs
         shell: pwsh
         run: ./build/Verify-SignedPackages.ps1 -PackagesDirectory ./signed -CertificateFingerprint $env:CERTUM_CERT_FINGERPRINT
 
-      - name: Upload signed packages
+      - name: Upload verified release packages
         uses: actions/upload-artifact@v7
         with:
           name: signed-nuget
@@ -301,8 +333,10 @@ jobs:
             signed/*.nupkg
             signed/*.snupkg
           if-no-files-found: error
+
   publish-nuget:
-    needs: [release, sign]
+    needs: [release, verify-signatures]
+    if: ${{ !inputs.verifyOnly }}
     runs-on: ubuntu-latest
     environment:
       name: release
