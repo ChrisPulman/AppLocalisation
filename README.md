@@ -602,11 +602,11 @@ WPF and WPF.Reactive also prefer registered resources while retaining their exis
 The repository verifies real trimmed and native executables on Windows:
 
 ```powershell
-pwsh -File ./build/Verify-Aot.ps1
+dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- aot
 ```
 
 This requires the Native AOT C++ build tools. The smoke consumer checks generated resource lookup and culture fallback, live bindings, refresh notifications, and generic enum conversion in both Avalonia variants.
-If the SDK cannot discover a newer Visual Studio installation, use `-UseEnvironmentalTools` to initialize the installed x64 C++ tools explicitly.
+If the SDK cannot discover a newer Visual Studio installation, use `--UseEnvironmentalTools` to initialize the installed x64 C++ tools explicitly.
 
 Use the generic enum converter for statically known enums in native applications:
 
@@ -1012,15 +1012,15 @@ The solution uses Microsoft Testing Platform with TUnit and TUnit assertions.
 ```powershell
 dotnet build .\src\Localisation.slnx --configuration Release -m:1
 dotnet test --solution .\src\Localisation.slnx --configuration Release --coverage --coverage-output-format cobertura --results-directory .\TestResults
-pwsh -File .\build\Assert-Coverage.ps1 -ResultsDirectory .\TestResults
+dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- coverage --ResultsDirectory ./TestResults
 ```
 
-Release packages include portable PDBs in `.snupkg` files. Before upload, `build/Prepare-SymbolPackages.ps1` checks each library's PDB identity and checksum against its DLL. Resource satellite assemblies do not require PDBs.
+Release packages include portable PDBs in `.snupkg` files. Before upload, the C# `symbols` command checks each library's PDB identity and checksum against its DLL. Resource satellite assemblies do not require PDBs.
 
 For a partially published version, the release workflow preserves the existing NuGet package and recovers its matching symbols from that package. Primary packages and symbol packages are pushed separately, allowing missing symbols to be published even when the primary package already exists. To validate local packages without accessing NuGet.org:
 
 ```powershell
-pwsh -File .\build\Prepare-SymbolPackages.ps1 -PackagesDirectory .\packages
+dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- symbols --PackagesDirectory ./packages
 ```
 
 ## License

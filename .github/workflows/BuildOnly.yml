@@ -62,11 +62,11 @@ jobs:
 
       - name: Verify trimmed and Native AOT resources
         shell: pwsh
-        run: ./build/Verify-Aot.ps1 -UseEnvironmentalTools
+        run: dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- aot --UseEnvironmentalTools
 
       - name: Assert package line coverage
         shell: pwsh
-        run: pwsh -File ./build/Assert-Coverage.ps1 -ResultsDirectory ./src/TestResults
+        run: dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- coverage --ResultsDirectory ./src/TestResults
 
       - name: Upload coverage
         uses: actions/upload-artifact@v7

@@ -11,6 +11,7 @@
     <File Path="../README.md" />
   </Folder>
   <Project Path="../build/_build.csproj" />
+  <Project Path="../build/Tools/Localisation.BuildTools.csproj" />
   <Project Path="Localisation.AotSmoke/Localisation.AotSmoke.csproj" />
   <Project Path="Localisation.Avalonia.Reactive/Localisation.Avalonia.Reactive.csproj" />
   <Project Path="Localisation.Avalonia.Tests/Localisation.Avalonia.Tests.csproj" />

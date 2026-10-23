@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\build\Tools\Localisation.BuildTools.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Localisation.Avalonia\Localisation.Avalonia.csproj" />
     <ProjectReference Include="..\Localisation.Avalonia.Reactive\Localisation.Avalonia.Reactive.csproj" />
   </ItemGroup>
