@@ -277,19 +277,21 @@ jobs:
             10.0.x
             11.0.x
 
-      - name: Build signing tool
+      - name: Install SafeSign
         shell: pwsh
-        run: dotnet build tools/ReleaseSigning/ReleaseSigning.csproj --configuration Release --verbosity quiet --nologo
+        run: dotnet tool install --tool-path .signing-tools SafeSign --version 1.1.0
 
-      - name: Sign and verify DLLs before signing NuGet packages
+      - name: Sign package contents and NuGet containers
         shell: pwsh
         env:
           CERTUM_USER_ID: ${{ secrets.CERTUM_USER_ID }}
           CERTUM_OTP_URI: ${{ secrets.CERTUM_OTP_URI }}
         run: |
           if (-not $env:CERTUM_USER_ID -or -not $env:CERTUM_OTP_URI) { throw 'Missing Certum signing credentials.' }
-          # One SafeSign provider/session signs every payload and then its enclosing package.
-          dotnet tools/ReleaseSigning/bin/Release/net10.0/ReleaseSigning.dll signed $env:CERTUM_CERT_FINGERPRINT
+          $packages = @(Get-ChildItem -LiteralPath ./signed -Filter '*.nupkg' -File | ForEach-Object FullName)
+          if ($packages.Count -eq 0) { throw 'No unsigned NuGet packages were found.' }
+          # SafeSign 1.1 recursively signs unsigned DLLs/EXEs before each container, in one Certum session.
+          & ./.signing-tools/safesign sign @packages --provider certum --hash SHA256 --timestamp-url http://time.certum.pl
           if ($LASTEXITCODE -ne 0) { throw 'Release signing failed.' }
 
       - name: Upload packages for Windows verification
