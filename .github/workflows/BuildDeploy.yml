@@ -284,12 +284,14 @@ jobs:
           packages=(signed/*.nupkg)
           [ "${#packages[@]}" -gt 0 ] || { echo "::error::no packages matched: signed/*.nupkg"; exit 1; }
 
+          # Share one authenticated Certum session across every package.
+          safesign sign "${packages[@]}" \
+            --provider certum \
+            --hash SHA256 \
+            --timestamp-url http://time.certum.pl
+
           for package in "${packages[@]}"; do
-            echo "::group::Sign $package"
-            safesign sign "$package" \
-              --provider certum \
-              --hash SHA256 \
-              --timestamp-url http://time.certum.pl
+            echo "::group::Verify $package"
             dotnet nuget verify "$package" --all --verbosity detailed
             echo "::endgroup::"
           done
