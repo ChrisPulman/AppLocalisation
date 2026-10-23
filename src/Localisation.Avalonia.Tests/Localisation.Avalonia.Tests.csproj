@@ -18,4 +18,9 @@
     <ProjectReference Include="..\Localisation.Avalonia.Reactive\Localisation.Avalonia.Reactive.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Localisation.Generators\Localisation.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <EmbeddedResource Include="..\Localisation.AotSmoke\SmokeResources*.resx" Link="GeneratedResources\%(Filename)%(Extension)" />
+  </ItemGroup>
+  <Import Project="..\Localisation.Generators\buildTransitive\Localisation.Generators.targets" />
 </Project>

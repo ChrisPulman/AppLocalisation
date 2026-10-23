@@ -10,6 +10,9 @@
     <NeutralLanguage>en-US</NeutralLanguage>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Localisation.Core\Localisation.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="System.Management" />
     <PackageReference Include="ReactiveUI.Primitives" />
   </ItemGroup>

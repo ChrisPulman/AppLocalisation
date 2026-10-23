@@ -3,11 +3,13 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net9.0;net10.0;net11.0</TargetFrameworks>
     <Nullable>enable</Nullable>
+    <IsAotCompatible>true</IsAotCompatible>
     <RootNamespace>CP.Localisation.Avalonia</RootNamespace>
     <NeutralLanguage>en-US</NeutralLanguage>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Localisation.Core\Localisation.Core.csproj" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="ReactiveUI.Primitives" />
   </ItemGroup>

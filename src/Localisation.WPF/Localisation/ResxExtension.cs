@@ -717,7 +717,7 @@ public class ResxExtension : ManagedMarkupExtension
             GetResource?.Invoke(null, getResourceEventArgs);
             var result = getResourceEventArgs.Resource;
 
-            if (result is null)
+            if (result is null && !LocalisationResourceRegistry.TryGetResource(resxName, key, CultureManager.UICulture, out result))
             {
                 _resourceManager ??= GetResourceManager(resxName);
                 result = _resourceManager?.GetObject(key, CultureManager.UICulture);

@@ -328,6 +328,111 @@ var args = new GetResourceEventArgs(
 };
 ```
 
+## Native AOT and trimming
+
+Use `Localisation.Generators` in every project that owns RESX files. It compiles string resources into C# lookup code and registers them at module initialization; runtime lookup requires no assembly scanning, resource deserialization, or reflection. `Localisation.Core` contains the shared provider registry.
+
+Load a separate resource assembly before creating localized controls, for example by calling its strongly referenced startup method. A `ResxName` string alone does not load an assembly. This also gives the trimmer a static reference to the generated providers.
+
+```powershell
+dotnet add package Localisation.Generators
+```
+
+Keep the RESX files as ordinary `EmbeddedResource` items. The package's build targets supply resource names and culture metadata automatically, including custom manifest names and linked resources. Set `NeutralLanguage` to the culture represented by the neutral RESX file. Culture lookup tries the requested culture, its parents, then neutral resources. Missing keys follow the extension's existing default-value behavior.
+
+Projects that use only generated lookups can omit binary RESX resources and satellite assemblies:
+
+```xml
+<PropertyGroup>
+  <LocalisationGenerateOnly>true</LocalisationGenerateOnly>
+</PropertyGroup>
+```
+
+The targets capture resource metadata before removing RESX inputs from binary resource compilation. Generated lookups retain ordinal, case-sensitive keys, including keys that differ only by case. Enable this option only when the project does not use `ResourceManager` or generated RESX designer properties to read those resources. Culture comparisons are ordinal and case-insensitive without allocating normalized culture names. Each culture has its own generated lookup method to keep native compilation manageable for large translation catalogs. Dictionary-only lookups read a sorted provider snapshot without allocating per lookup; registration pays the sorting cost.
+
+For Avalonia, use `GeneratedResxExtension` from the namespace of your selected lean or `.Reactive` package:
+
+```xml
+<TextBlock Text="{loc:GeneratedResx Greeting, ResxName=MyApp.Properties.Resources}" />
+```
+
+It shares inherited `DefaultResxName`, culture switching, `GetResource`, `UpdateTarget`, `UpdateAllTargets`, `BindingConverter`, and `BindingStringFormat` with `ResxExtension`. Supply fallback values compatible with the target property, or an explicit `BindingConverter` for custom conversion. The generated path never discovers `TypeConverter` implementations automatically. Existing `ResxExtension` and enum APIs retain their behavior; reflection-dependent entry points report trimming/AOT analyzer warnings and should be avoided in native applications.
+
+For images, objects, external data, or custom resource formats, register a statically referenced provider:
+
+```csharp
+using CP.Localisation;
+
+LocalisationResourceRegistry.Register(
+    "MyApp",
+    "MyApp.CustomResources",
+    static (key, culture) => key == "Greeting" ? "Hello" : null,
+    new[] { "en-US" });
+
+bool found = LocalisationResourceRegistry.TryGetResource(
+    "MyApp", "MyApp.CustomResources", "Greeting",
+    CultureInfo.GetCultureInfo("en-US"), out object? value);
+
+var cultures = LocalisationResourceRegistry.GetAvailableCultures("MyApp");
+```
+
+Providers implement their own fallback and return null for missing keys. Registration replaces a provider and its advertised cultures atomically. Non-string RESX entries produce `LOCGEN002`; malformed files and invalid metadata produce `LOCGEN001`. Move non-string values into a dedicated explicit provider rather than relying on resource deserialization in native applications.
+
+WPF and WPF.Reactive also prefer registered resources while retaining their existing lookup fallback. WPF itself does not support trimming or Native AOT; see Microsoft's [known trimming incompatibilities](https://learn.microsoft.com/dotnet/core/deploying/trimming/incompatibilities). Use the Avalonia packages for a native UI application.
+
+The repository verifies real trimmed and native executables on Windows:
+
+```powershell
+pwsh -File ./build/Verify-Aot.ps1
+```
+
+This requires the Native AOT C++ build tools. The smoke consumer checks generated resource lookup and culture fallback, live bindings, refresh notifications, and generic enum conversion in both Avalonia variants.
+If the SDK cannot discover a newer Visual Studio installation, use `-UseEnvironmentalTools` to initialize the installed x64 C++ tools explicitly.
+
+Use the generic enum converter for statically known enums in native applications:
+
+```csharp
+var converter = new ResourceEnumConverter<OrderStatus>("MyApp.Properties.Resources");
+string text = converter.ConvertToString(OrderStatus.Pending);
+OrderStatus? value = converter.ConvertFromString(text);
+var choices = converter.GetValues(CultureInfo.GetCultureInfo("fr-FR"));
+```
+
+Pass `isFlags: true` for a flags enum. A third constructor argument accepts a key-building delegate when `<EnumTypeName>_<Value>` does not match your keys. The converter implements Avalonia's `IValueConverter` directly and can be assigned explicitly to a binding.
+
+## Reusable live localisation
+
+`Localisation.Core` also provides resource-scoped culture contexts, deferred messages and fixed translated string lists. Resources stay in the consuming application. These APIs resolve registered providers without reflection and do not depend on a UI toolkit or ReactiveUI.
+
+```csharp
+using System.Globalization;
+using CP.Localisation;
+using CP.Localisation.Avalonia;
+
+using var context = new LocalisationContext("MyApp", "MyApp.Strings");
+var message = LocalisationMessage.Format(context, "SavedFile", "report.pdf");
+var labels = context.CreateChoices("Light", "Dark");
+var items = LocalisationChoices.CreateItems(context, labels.ResourceKeys);
+comboBox.ItemsSource = items;
+comboBox.ItemTemplate = LocalisationChoices.CreateTemplate();
+
+context.SetCulture(CultureInfo.GetCultureInfo("fr"));
+context.RefreshChoices(); // Notify observers of string labels, when used outside the selector.
+string status = message.ToString();
+```
+
+`LocalisationContext.CultureChanges` replays the current culture and publishes subsequent changes. Until the first `SetCulture`, lookup follows the caller's `CurrentUICulture`. Once selected, the context's culture is independent of captured asynchronous execution contexts. Contexts can use different languages simultaneously. Setting a context culture never changes thread cultures, number/date formatting, the legacy `CultureManager`, or another context. The application owns any bridge to those policies. Dispose a context when its owner ends; existing subscriptions complete. Resource lookup remains available after disposal, but further culture changes are rejected.
+
+`LocalisationMessage.Get`, `Format`, `Literal` and `Concat` retain resource identities and nested messages until their value is read. Literal document or user text remains literal; composite arguments use the caller's `CurrentCulture`. `LocalisationStringList` copies its keys, exposes immutable `ResourceKeys`, and implements read-only `IList` plus collection replacement notifications through explicit `Refresh()`. `GetResourceKeys` accepts either a translated list or an ordinary key list. A context's `CreateChoices` weakly tracks its lists for `RefreshChoices`; direct construction leaves refresh ownership with the caller. Call refresh on the collection observers' owning thread. `Initialize(probeKey)` validates an application-owned resource key before controls are constructed.
+
+For Avalonia, `LocalisationBinding.Create(context, state, selector)` creates a typed culture-driven binding. For example, bind `FlowDirection` through a selector using `culture.TextInfo.IsRightToLeft`. Bindings run on the publishing thread; UI consumers should select the context culture on their UI thread. `LocalisationChoices` supplies stable items and a live label template, so language changes retain selection and localized keyboard search. `CreateItemsConverter(context)` creates a cache owned by one binding; reuse immutable key-list references to retain its item identities. The same helpers are available in `CP.Localisation.Avalonia.Reactive`.
+
+`ILocalisationChildren` and `LocalisationRefresh` provide reflection-free graph refresh. Implement `Refresh(HashSet<object> visited)` to notify the properties your model owns and pass existing children to `LocalisationRefresh.RefreshCore(child, visited)`. Start a traversal with `LocalisationRefresh.Refresh(root)`. Shared children and cycles are visited once by reference; strings are excluded, enumerable items are visited, and no properties or lazy factories are discovered. Models retain control over which state participates.
+
+`InterfaceCulture.Resolve(args, savedLanguage, desktopCulture)` resolves the last `--language=name` or `--language name` override, then a saved culture, then the desktop fallback. Empty or invalid names follow the desktop. `InterfaceCulture.Apply(context, culture)` changes `CurrentUICulture` and `DefaultThreadCurrentUICulture` before publishing the context culture, preserving number and date cultures. Applications supply their own settings storage, supported-language choices and captured desktop preference.
+
+For Avalonia, `LocalisationWindows.ApplyDirection(application, context)` installs a live window direction style. `LocalisationWindows.Refresh(application, context, culture)` synchronizes existing generated resource bindings, refreshes context-owned choices, and traverses data contexts and item sources in existing desktop windows. `Refresh(window)` supports hosts without a desktop application lifetime. Both Avalonia package variants provide these helpers. Window creation/lifetime, explicit model notifications, translations, styling and document-specific direction overrides remain consumer responsibilities.
+
 ## Localized enums
 
 Enum resource keys use `<EnumTypeName>_<MemberName>`, for example `OrderStatus_Pending`.

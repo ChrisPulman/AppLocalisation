@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
@@ -104,49 +105,17 @@ public sealed class ResxExtension
     /// <summary>Creates an Avalonia binding that tracks culture and resource refresh notifications.</summary>
     /// <param name="serviceProvider">The XAML service provider.</param>
     /// <returns>An observable Avalonia binding.</returns>
-    public object ProvideValue(IServiceProvider? serviceProvider)
-    {
-        var targetService = serviceProvider?.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
-        var target = targetService?.TargetObject as AvaloniaObject;
-        var targetType = targetService?.TargetProperty switch
-        {
-            AvaloniaProperty property => property.PropertyType,
-            PropertyInfo property => GetClrPropertyType(property),
-            _ => typeof(object),
-        };
+    [RequiresUnreferencedCode("Uses automatic TypeDescriptor discovery. Use GeneratedResxExtension for trimming and Native AOT.")]
+    public object ProvideValue(IServiceProvider? serviceProvider) =>
+        CreateBinding(serviceProvider, ResolveValue, true);
 
-        return new RefreshingObservable<object?>(
-            () => ResolveValue(target, targetType),
-            Key,
-            observeResourceChanges: true).ToBinding();
-    }
+    internal object ProvideGeneratedValue(IServiceProvider? serviceProvider) =>
+        CreateBinding(serviceProvider, ResolveGeneratedValue, false);
 
-    internal object? ResolveValue(AvaloniaObject? target, Type targetType)
-    {
-        var culture = CultureManager.UICulture;
-        var resxName = ResxName ?? (target is null ? null : GetDefaultResxName(target));
-        var eventArgs = new GetResourceEventArgs(resxName, Key, culture);
-        GetResource?.Invoke(this, eventArgs);
-        var value = eventArgs.Resource;
+    internal object? ResolveGeneratedValue(AvaloniaObject? target, Type targetType) => ResolveCore(target, targetType, null);
 
-        if (value is null && resxName is not null && Key is not null)
-        {
-            value = FindResourceManager(resxName)?.GetObject(Key, culture);
-        }
-
-        value ??= GetDefaultValue(targetType);
-        if (BindingConverter is not null)
-        {
-            value = BindingConverter.Convert(value, targetType, BindingConverterParameter, culture);
-        }
-
-        if (BindingStringFormat is not null)
-        {
-            value = string.Format(culture, BindingStringFormat, value);
-        }
-
-        return value;
-    }
+    [RequiresUnreferencedCode("Uses automatic TypeDescriptor discovery. Use GeneratedResxExtension for trimming and Native AOT.")]
+    internal object? ResolveValue(AvaloniaObject? target, Type targetType) => ResolveCore(target, targetType, ConvertDefaultValue);
 
     private static ResourceManager? FindResourceManager(string resxName)
     {
@@ -176,7 +145,60 @@ public sealed class ResxExtension
 
     private static Type GetClrPropertyType(PropertyInfo property) => property.PropertyType;
 
-    private object? GetDefaultValue(Type targetType)
+    [RequiresUnreferencedCode("Discovers custom TypeDescriptor converters. Use GeneratedResxExtension for trimming and Native AOT.")]
+    private static object? ConvertDefaultValue(Type targetType, object value) =>
+        TypeDescriptor.GetConverter(targetType).ConvertFrom(null, CultureInfo.InvariantCulture, value);
+
+    private global::Avalonia.Data.BindingBase CreateBinding(
+        IServiceProvider? serviceProvider,
+        Func<AvaloniaObject?, Type, object?> resolve,
+        bool useClrPropertyType)
+    {
+        var targetService = serviceProvider?.GetService(typeof(IProvideValueTarget)) as IProvideValueTarget;
+        var target = targetService?.TargetObject as AvaloniaObject;
+        var targetType = targetService?.TargetProperty switch
+        {
+            AvaloniaProperty property => property.PropertyType,
+            PropertyInfo property when useClrPropertyType => GetClrPropertyType(property),
+            _ => typeof(object),
+        };
+
+        return new RefreshingObservable<object?>(
+            () => resolve(target, targetType),
+            Key,
+            observeResourceChanges: true).ToBinding();
+    }
+
+    private object? ResolveCore(AvaloniaObject? target, Type targetType, Func<Type, object, object?>? defaultConverter)
+    {
+        var culture = CultureManager.UICulture;
+        var resxName = ResxName ?? (target is null ? null : GetDefaultResxName(target));
+        var eventArgs = new GetResourceEventArgs(resxName, Key, culture);
+        GetResource?.Invoke(this, eventArgs);
+        var value = eventArgs.Resource;
+
+        if (value is null && resxName is not null && Key is not null
+            && !CP.Localisation.LocalisationResourceRegistry.TryGetResource(resxName, Key, culture, out value)
+            && defaultConverter is not null)
+        {
+            value = FindResourceManager(resxName)?.GetObject(Key, culture);
+        }
+
+        value ??= GetDefaultValue(targetType, defaultConverter);
+        if (BindingConverter is not null)
+        {
+            value = BindingConverter.Convert(value, targetType, BindingConverterParameter, culture);
+        }
+
+        if (BindingStringFormat is not null)
+        {
+            value = string.Format(culture, BindingStringFormat, value);
+        }
+
+        return value;
+    }
+
+    private object? GetDefaultValue(Type targetType, Func<Type, object, object?>? defaultConverter)
     {
         if (DefaultValue is null)
         {
@@ -190,7 +212,7 @@ public sealed class ResxExtension
 
         try
         {
-            return TypeDescriptor.GetConverter(targetType).ConvertFrom(null, CultureInfo.InvariantCulture, DefaultValue);
+            return defaultConverter is null ? DefaultValue : defaultConverter(targetType, DefaultValue);
         }
         catch (Exception exception) when (exception is ArgumentException or NotSupportedException or FormatException)
         {

@@ -60,6 +60,10 @@ jobs:
             --coverage-output-format cobertura \
             --results-directory ./TestResults
 
+      - name: Verify trimmed and Native AOT resources
+        shell: pwsh
+        run: ./build/Verify-Aot.ps1 -UseEnvironmentalTools
+
       - name: Assert package line coverage
         shell: pwsh
         run: pwsh -File ./build/Assert-Coverage.ps1 -ResultsDirectory ./src/TestResults

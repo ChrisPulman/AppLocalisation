@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Resources;
 using Avalonia.Data.Converters;
@@ -28,7 +29,9 @@ public class ResourceEnumConverter : EnumConverter, IValueConverter
     /// <summary>Initializes a new instance of the <see cref="ResourceEnumConverter"/> class.</summary>
     /// <param name="type">The enumeration type.</param>
     /// <param name="resourceManager">The resource manager containing localized enumeration names.</param>
-    public ResourceEnumConverter(Type type, ResourceManager resourceManager)
+    public ResourceEnumConverter(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor | DynamicallyAccessedMemberTypes.PublicFields)] Type type,
+        ResourceManager resourceManager)
         : base(type)
     {
         ArgumentNullException.ThrowIfNull(type);
@@ -39,12 +42,13 @@ public class ResourceEnumConverter : EnumConverter, IValueConverter
             return;
         }
 
-        _flagValues = Enum.GetValues(type);
+        _flagValues = Array.ConvertAll(Enum.GetNames(type), name => Enum.Parse(type, name));
     }
 
     /// <summary>Uses the registered type converter to localize an enumeration value.</summary>
     /// <param name="value">The enumeration value.</param>
     /// <returns>The localized string.</returns>
+    [RequiresUnreferencedCode("Uses the registered TypeDescriptor converter. Use ResourceEnumConverter<TEnum> for trimming and Native AOT.")]
     public static string? ConvertToString(Enum value)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -55,6 +59,8 @@ public class ResourceEnumConverter : EnumConverter, IValueConverter
     /// <param name="enumType">The enumeration type.</param>
     /// <param name="culture">The lookup culture.</param>
     /// <returns>The localized enumeration values.</returns>
+    [RequiresUnreferencedCode("Uses the registered TypeDescriptor converter. Use ResourceEnumConverter<TEnum> for trimming and Native AOT.")]
+    [RequiresDynamicCode("Enumerates an enum type supplied at runtime. Use ResourceEnumConverter<TEnum> instead.")]
     public static List<KeyValuePair<Enum, string?>> GetValues(Type enumType, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(enumType);
@@ -72,6 +78,8 @@ public class ResourceEnumConverter : EnumConverter, IValueConverter
     /// <summary>Gets every enumeration value and its localized display text using the current UI culture.</summary>
     /// <param name="enumType">The enumeration type.</param>
     /// <returns>The localized enumeration values.</returns>
+    [RequiresUnreferencedCode("Uses the registered TypeDescriptor converter. Use ResourceEnumConverter<TEnum> for trimming and Native AOT.")]
+    [RequiresDynamicCode("Enumerates an enum type supplied at runtime. Use ResourceEnumConverter<TEnum> instead.")]
     public static List<KeyValuePair<Enum, string?>> GetValues(Type enumType) => GetValues(enumType, CultureInfo.CurrentUICulture);
 
     /// <inheritdoc />

@@ -2,6 +2,7 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 #if REACTIVE_SHIM
@@ -31,6 +32,7 @@ public static class Extensions
     {
         /// <summary>Converts an enumeration value to its localized display string.</summary>
         /// <returns>The localized display string, when one can be resolved.</returns>
+        [RequiresUnreferencedCode("Uses the registered TypeDescriptor converter. Use ResourceEnumConverter<TEnum> for trimming and Native AOT.")]
         public string? ConvertToString() => ResourceEnumConverter.ConvertToString(value);
     }
 }

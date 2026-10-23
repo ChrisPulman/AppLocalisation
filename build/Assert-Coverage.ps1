@@ -9,7 +9,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$targets = @('Localisation.WPF', 'Localisation.WPF.Reactive', 'Localisation.Avalonia', 'Localisation.Avalonia.Reactive')
+$targets = @('Localisation.WPF', 'Localisation.WPF.Reactive', 'Localisation.Avalonia', 'Localisation.Avalonia.Reactive', 'Localisation.Core', 'Localisation.Generators')
 
 $resolvedCoverageDirectory = Resolve-Path -LiteralPath $ResultsDirectory -ErrorAction Stop
 $reports = @(Get-ChildItem -LiteralPath $resolvedCoverageDirectory -Filter '*.cobertura.xml' -File -Recurse)

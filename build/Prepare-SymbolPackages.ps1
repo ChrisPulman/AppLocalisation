@@ -114,8 +114,8 @@ foreach ($package in $packages) {
             if ($publishedPath) {
                 foreach ($entry in @($symbols.Entries | Where-Object FullName -Like '*.pdb')) { $entry.Delete() }
             }
-            $dlls = @($main.Entries | Where-Object { $_.FullName -like 'lib/*.dll' -and $_.FullName -notlike '*.resources.dll' })
-            if ($dlls.Count -eq 0) { throw "No library assemblies in '$($package.Name)'." }
+            $dlls = @($main.Entries | Where-Object { ($_.FullName -like 'lib/*.dll' -or $_.FullName -like 'analyzers/dotnet/cs/*.dll') -and $_.FullName -notlike '*.resources.dll' })
+            if ($dlls.Count -eq 0) { throw "No library or analyzer assemblies in '$($package.Name)'." }
             foreach ($dll in $dlls) {
                 $memory = [IO.MemoryStream]::new((Read-EntryBytes $dll))
                 $reader = [Reflection.PortableExecutable.PEReader]::new($memory)

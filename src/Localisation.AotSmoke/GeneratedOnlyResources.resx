@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="CaseKey" xml:space="preserve"><value>Upper case key</value></data>
+  <data name="casekey" xml:space="preserve"><value>Lower case key</value></data>
+</root>

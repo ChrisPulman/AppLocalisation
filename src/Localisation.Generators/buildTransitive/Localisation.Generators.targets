@@ -1,0 +1,24 @@
+<Project>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="AssemblyName" />
+    <CompilerVisibleProperty Include="NeutralLanguage" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="LocalisationResourceName" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="CultureName" />
+  </ItemGroup>
+  <Target Name="LocalisationCollectResources" BeforeTargets="GenerateMSBuildEditorConfigFileCore" DependsOnTargets="AssignTargetPaths;SplitResourcesByCulture;CreateManifestResourceNames">
+    <ItemGroup>
+      <AdditionalFiles Include="@(EmbeddedResource)" Condition="'%(EmbeddedResource.Extension)' == '.resx'">
+        <LocalisationResourceName>%(EmbeddedResource.ManifestResourceName)</LocalisationResourceName>
+        <LocalisationResourceName Condition="'%(EmbeddedResource.LogicalName)' != ''">$([System.Text.RegularExpressions.Regex]::Replace('%(EmbeddedResource.LogicalName)', '\.resources$', ''))</LocalisationResourceName>
+        <CultureName>%(EmbeddedResource.Culture)</CultureName>
+      </AdditionalFiles>
+    </ItemGroup>
+  </Target>
+  <!-- Generated-only dictionaries need no binary resources or satellite assemblies. Capture metadata first. -->
+  <Target Name="LocalisationUseGeneratedResourcesOnly" BeforeTargets="CoreResGen"
+          DependsOnTargets="LocalisationCollectResources" Condition="'$(LocalisationGenerateOnly)' == 'true'">
+    <ItemGroup>
+      <EmbeddedResource Remove="@(EmbeddedResource)" Condition="'%(EmbeddedResource.Extension)' == '.resx'" />
+    </ItemGroup>
+  </Target>
+</Project>

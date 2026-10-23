@@ -17,6 +17,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Localisation.Core\Localisation.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ReactiveUI.Primitives.Reactive" />
     <PackageReference Include="System.Management" />
   </ItemGroup>
