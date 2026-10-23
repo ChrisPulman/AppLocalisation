@@ -109,14 +109,15 @@ public sealed class SymbolPackageTests
         string published,
         CancellationToken cancellationToken)
     {
-        var start = new ProcessStartInfo("pwsh")
+        var start = new ProcessStartInfo("dotnet")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var argument in (string[])["-NoProfile", "-File", FindScript(), "-PackagesDirectory", packages, "-PublishedPackagesDirectory", published])
+        foreach (var argument in (string[])
+                 [BuildToolTestHost.FindTool(), "symbols", "--PackagesDirectory", packages, "--PublishedPackagesDirectory", published])
         {
             start.ArgumentList.Add(argument);
         }
@@ -126,22 +127,5 @@ public sealed class SymbolPackageTests
         var error = process.StandardError.ReadToEndAsync(cancellationToken);
         await process.WaitForExitAsync(cancellationToken);
         return (process.ExitCode, $"{await output}\n{await error}");
-    }
-
-    private static string FindScript()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var script = Path.Combine(directory.FullName, "build", "Prepare-SymbolPackages.ps1");
-            if (File.Exists(script))
-            {
-                return script;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException("Prepare-SymbolPackages.ps1 could not be located.");
     }
 }

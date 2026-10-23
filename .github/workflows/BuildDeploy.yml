@@ -226,12 +226,12 @@ jobs:
 
       - name: Verify trimmed and Native AOT resources
         shell: pwsh
-        run: ./build/Verify-Aot.ps1 -UseEnvironmentalTools
+        run: dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- aot --UseEnvironmentalTools
 
       - name: Assert package line coverage
         shell: pwsh
         working-directory: ${{ env.solutionFolder }}
-        run: pwsh -File ../build/Assert-Coverage.ps1 -ResultsDirectory ./TestResults
+        run: dotnet run --project ../build/Tools/Localisation.BuildTools.csproj -c Release -- coverage --ResultsDirectory ./TestResults
 
       - name: Pack unsigned NuGet packages
         shell: bash
@@ -242,7 +242,7 @@ jobs:
 
       - name: Prepare and validate symbol packages
         shell: pwsh
-        run: ./build/Prepare-SymbolPackages.ps1 -PackagesDirectory ./packages -ResolvePublishedPackages
+        run: dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- symbols --PackagesDirectory ./packages --ResolvePublishedPackages
 
       - name: Upload unsigned packages
         uses: actions/upload-artifact@v7
@@ -321,11 +321,13 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 11.0.x
+          dotnet-version: |
+            10.0.x
+            11.0.x
 
       - name: Verify final NuGet signatures and packaged DLLs
         shell: pwsh
-        run: ./build/Verify-SignedPackages.ps1 -PackagesDirectory ./signed -CertificateFingerprint $env:CERTUM_CERT_FINGERPRINT
+        run: dotnet run --project ./build/Tools/Localisation.BuildTools.csproj -c Release -- signatures --PackagesDirectory ./signed --CertificateFingerprint $env:CERTUM_CERT_FINGERPRINT
 
       - name: Upload verified release packages
         uses: actions/upload-artifact@v7

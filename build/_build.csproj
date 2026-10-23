@@ -14,6 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Tools/**/*.cs" />
     <PackageReference Include="Nuke.Common" />
     <PackageReference Include="CP.Nuke.BuildTools" />
     <PackageReference Include="NuGet.Packaging" />
