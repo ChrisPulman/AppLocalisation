@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\tools\ReleaseSigning\ReleaseSigning.csproj" />
+    <PackageReference Include="SafeSign.Formats" PrivateAssets="all" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="TUnit" />

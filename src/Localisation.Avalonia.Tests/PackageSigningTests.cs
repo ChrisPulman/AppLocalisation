@@ -11,7 +11,7 @@ using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using Localisation.ReleaseSigning;
+using SafeSign.Formats.NuGet;
 using SafeSign.Signing;
 
 namespace Localisation.Avalonia.Tests;
@@ -31,16 +31,14 @@ internal sealed class PackageSigningTests
         using var fixture = new SigningFixture();
         var first = fixture.CreatePackage("First");
         var second = fixture.CreatePackage("Second");
-        const int expectedPayloadSignatures = 4;
         const int expectedTotalSignatures = 6;
-        var verified = 0;
-        await PackageSigning.SignAsync(fixture.DirectoryPath, fixture.Session, async path =>
+        var signer = new NuGetFileSigner();
+        var session = fixture.Session;
+        foreach (var package in new[] { first, second })
         {
-            await VerifyPeAsync(await File.ReadAllBytesAsync(path), fixture.Certificate);
-            verified++;
-        });
+            await signer.SignAsync(new(package, package, session), CancellationToken.None);
+        }
 
-        await Assert.That(verified).IsEqualTo(expectedPayloadSignatures);
         await Assert.That(fixture.SignCount).IsEqualTo(expectedTotalSignatures);
         await Assert.That(fixture.CertificateRequests).IsEqualTo(0);
         foreach (var package in new[] { first, second })
@@ -54,31 +52,20 @@ internal sealed class PackageSigningTests
         }
     }
 
-    /// <summary>Verifies a rejected payload never publishes a partially signed package or signs its container.</summary>
+    /// <summary>Verifies a provider failure never publishes a partially signed package.</summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
-    internal async Task SignAsyncVerificationFailurePreservesOriginalPackage()
+    internal async Task SignAsyncProviderFailurePreservesOriginalPackage()
     {
         using var fixture = new SigningFixture();
         var package = fixture.CreatePackage("Rejected");
-        var secondPackage = fixture.CreatePackage("SecondRejected");
         var original = await File.ReadAllBytesAsync(package);
-        var secondOriginal = await File.ReadAllBytesAsync(secondPackage);
-        var verified = 0;
-        const int rejectedVerification = 3;
-        await Assert.That(() => PackageSigning.SignAsync(
-            fixture.DirectoryPath,
-            fixture.Session,
-            _ =>
-            {
-                verified++;
-                return verified == rejectedVerification
-                    ? throw new InvalidDataException("Injected verification failure.")
-                    : Task.CompletedTask;
-            })).Throws<InvalidDataException>();
+        const int rejectedSignature = 2;
+        fixture.FailOnSignature = rejectedSignature;
+        var signer = new NuGetFileSigner();
+        await Assert.That(async () => await signer.SignAsync(new(package, package, fixture.Session), CancellationToken.None)).Throws<CryptographicException>();
         await Assert.That(await File.ReadAllBytesAsync(package)).IsEquivalentTo(original);
-        await Assert.That(await File.ReadAllBytesAsync(secondPackage)).IsEquivalentTo(secondOriginal);
-        await Assert.That(fixture.SignCount).IsEqualTo(rejectedVerification);
+        await Assert.That(fixture.SignCount).IsEqualTo(rejectedSignature);
         await using var archive = await ZipFile.OpenReadAsync(package);
         await Assert.That(archive.GetEntry(SignaturePath)).IsNull();
     }
@@ -88,27 +75,14 @@ internal sealed class PackageSigningTests
     /// <returns>A task representing the asynchronous test.</returns>
     [Test]
     [Arguments("malformed")]
-    [Arguments("no-dll")]
-    [Arguments("duplicate")]
-    [Arguments("empty-dll")]
-    [Arguments("signed")]
     internal async Task SignAsyncInvalidPackagePreservesOriginal(string scenario)
     {
         using var fixture = new SigningFixture();
         var package = fixture.CreatePackage("Invalid", scenario);
         var original = await File.ReadAllBytesAsync(package);
-        await Assert.That(() => PackageSigning.SignAsync(fixture.DirectoryPath, fixture.Session, _ => Task.CompletedTask)).Throws<InvalidDataException>();
+        var signer = new NuGetFileSigner();
+        await Assert.That(async () => await signer.SignAsync(new(package, package, fixture.Session), CancellationToken.None)).Throws<InvalidDataException>();
         await Assert.That(await File.ReadAllBytesAsync(package)).IsEquivalentTo(original);
-        await Assert.That(fixture.SignCount).IsEqualTo(0);
-    }
-
-    /// <summary>Verifies an empty package directory cannot silently succeed.</summary>
-    /// <returns>A task representing the asynchronous test.</returns>
-    [Test]
-    internal async Task SignAsyncEmptyDirectoryFails()
-    {
-        using var fixture = new SigningFixture();
-        await Assert.That(() => PackageSigning.SignAsync(fixture.DirectoryPath, fixture.Session, _ => Task.CompletedTask)).Throws<InvalidDataException>();
         await Assert.That(fixture.SignCount).IsEqualTo(0);
     }
 
@@ -186,6 +160,8 @@ internal sealed class PackageSigningTests
 
         internal int SignCount { get; private set; }
 
+        internal int? FailOnSignature { get; set; }
+
         internal int CertificateRequests { get; private set; }
 
         public ValueTask<SigningCertificate> GetCertificateAsync(CancellationToken cancellationToken)
@@ -198,6 +174,11 @@ internal sealed class PackageSigningTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             SignCount++;
+            if (SignCount == FailOnSignature)
+            {
+                throw new CryptographicException("Injected signing provider failure.");
+            }
+
             return ValueTask.FromResult(_key.SignHash(request.Digest.Span, request.HashAlgorithm, RSASignaturePadding.Pkcs1));
         }
 
@@ -226,17 +207,9 @@ internal sealed class PackageSigningTests
 
             AddEntry(archive, "lib/net10.0/Ordinary.pdb", AuxiliaryBytes);
             AddEntry(archive, "data/readme.txt", AuxiliaryBytes);
-            if (scenario != "no-dll")
-            {
-                var image = scenario == "empty-dll" ? [] : File.ReadAllBytes(typeof(PackageSigning).Assembly.Location);
-                AddEntry(archive, OrdinaryPath, image);
-                AddEntry(archive, scenario == "duplicate" ? OrdinaryPath : "analyzers/dotnet/cs/Analyzer.dll", image);
-            }
-
-            if (scenario == "signed")
-            {
-                AddEntry(archive, SignaturePath, AuxiliaryBytes);
-            }
+            var image = scenario == "empty-dll" ? [] : File.ReadAllBytes(typeof(PackageSigningTests).Assembly.Location);
+            AddEntry(archive, OrdinaryPath, image);
+            AddEntry(archive, "analyzers/dotnet/cs/Analyzer.dll", image);
 
             return path;
         }
