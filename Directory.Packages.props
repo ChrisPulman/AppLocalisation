@@ -21,7 +21,7 @@
     <PackageVersion Include="PerformanceSharp.Analyzers" Version="$(RoslynAnalysersVersion)" />
     <PackageVersion Include="SecuritySharp.Analyzers" Version="$(RoslynAnalysersVersion)" />
     <PackageVersion Include="System.Management" Version="10.0.13" />
-    <PackageVersion Include="System.Resources.Extensions" Version="10.0.13" />
+    <PackageVersion Include="System.Resources.Extensions" Version="10.0.14" />
     <PackageVersion Include="TUnit" Version="1.76.0" />
     <PackageVersion Include="Nuke.Common" Version="10.1.0" />
     <PackageVersion Include="CP.Nuke.BuildTools" Version="3.0.2" />
